@@ -9,14 +9,17 @@ const messageSchema = new mongoose.Schema({
   giftData: {
     giftItemId: String,
     tokenAmount: Number,
-    message: String
+    message: String,
   },
   isRead: { type: Boolean, default: false },
-  createdAt: { type: Date, default: Date.now }
-});
+  isDeleted: { type: Boolean, default: false },
+  deletedAt: { type: Date, default: null },
+  deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+}, { timestamps: true });
 
 messageSchema.index({ matchId: 1, createdAt: 1 });
 messageSchema.index({ senderId: 1 });
+messageSchema.index({ isDeleted: 1 });
 // Optional TTL for auto-deletion after 30 days
 // messageSchema.index({ createdAt: 1 }, { expireAfterSeconds: 2592000 });
 

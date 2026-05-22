@@ -1,18 +1,30 @@
 // src/controllers/matchController.js
 import Match from '../models/match.js';
 import User from '../models/user.js';
+import Block from '../models/block.js';
 import { sendSuccess, sendFailure } from '../helper/utils.js';
+import { paginate } from '../utils/paginate.js';
+import { dateRangeFilter } from '../utils/softDelete.js';
 import crypto from 'crypto';
 
 const findMatchCandidate = async (userId, interests = []) => {
+  // Fetch users the requester has blocked or been blocked by
+  const blockDocs = await Block.find({
+    $or: [{ blockerId: userId }, { blockedUserId: userId }],
+  }).select('blockerId blockedUserId');
+
+  const blockedIds = blockDocs.map(b =>
+    b.blockerId.equals(userId) ? b.blockedUserId : b.blockerId
+  );
+
   const matchQuery = {
-    _id: { $ne: userId },
+    _id: { $ne: userId, $nin: blockedIds },
     isOnline: true,
     accountStatus: 'active',
+    isDeleted: { $ne: true },
   };
-  if (interests.length) {
-    matchQuery.interests = { $in: interests };
-  }
+  if (interests.length) matchQuery.interests = { $in: interests };
+
   const candidates = await User.find(matchQuery).limit(10);
   if (!candidates.length) return null;
   return candidates[Math.floor(Math.random() * candidates.length)];
@@ -131,24 +143,43 @@ export const rateMatch = async (req, res) => {
   }
 };
 
+// Filters: matchType, startedFrom, startedTo, minDuration, minRating
 export const getMatchHistory = async (req, res) => {
   try {
-    const { page = 1, limit = 20 } = req.query;
-    const matches = await Match.find({ participants: req.user._id, status: 'ended' })
-      .sort({ endedAt: -1 })
-      .limit(Number(limit))
-      .skip((Number(page) - 1) * Number(limit))
-      .populate('participants', 'displayName avatarUrl');
-    const total = await Match.countDocuments({ participants: req.user._id, status: 'ended' });
-    sendSuccess(res, { matches, total, page: Number(page), totalPages: Math.ceil(total / limit) });
+    const { page, limit, matchType, startedFrom, startedTo, minDuration, minRating } = req.query;
+
+    const filter = { participants: req.user._id, status: 'ended' };
+    if (matchType) filter.matchType = matchType;
+    const startedRange = dateRangeFilter(startedFrom, startedTo);
+    if (startedRange) filter.startedAt = startedRange;
+    if (minDuration) filter.duration = { $gte: Number(minDuration) };
+    if (minRating) {
+      filter.$or = [
+        { user1Rating: { $gte: Number(minRating) } },
+        { user2Rating: { $gte: Number(minRating) } },
+      ];
+    }
+
+    const { data: matches, ...meta } = await paginate(Match, filter, {
+      page,
+      limit,
+      sort: { endedAt: -1 },
+      populate: { path: 'participants', select: 'displayName avatarUrl' },
+    });
+    sendSuccess(res, { matches, ...meta });
   } catch (error) {
     sendFailure(res, error.message);
   }
 };
 
+// Filters: matchType
 export const getActiveMatches = async (req, res) => {
   try {
-    const matches = await Match.find({ participants: req.user._id, status: 'active' })
+    const { matchType } = req.query;
+    const filter = { participants: req.user._id, status: 'active' };
+    if (matchType) filter.matchType = matchType;
+
+    const matches = await Match.find(filter)
       .populate('participants', 'displayName avatarUrl isOnline');
     sendSuccess(res, matches);
   } catch (error) {

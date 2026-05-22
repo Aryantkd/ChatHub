@@ -1,6 +1,8 @@
 // src/controllers/verificationController.js
 import { Verification, User } from '../models/index.js';
 import { sendSuccess, sendFailure } from '../helper/utils.js';
+import { paginate } from '../utils/paginate.js';
+import { dateRangeFilter } from '../utils/softDelete.js';
 
 export const submitVerification = async (req, res) => {
   try {
@@ -69,17 +71,43 @@ export const reviewVerification = async (req, res) => {
   }
 };
 
+// Admin: pending queue — filters: documentType, dateFrom, dateTo
 export const getPendingVerifications = async (req, res) => {
   try {
-    const { page = 1, limit = 20 } = req.query;
-    const verifications = await Verification.find({ status: 'pending' })
-      .populate('userId', 'displayName email avatarUrl')
-      .sort({ createdAt: 1 })
-      .limit(Number(limit))
-      .skip((Number(page) - 1) * Number(limit));
+    const { page, limit, documentType, dateFrom, dateTo } = req.query;
+    const filter = { status: 'pending' };
+    if (documentType) filter.documentType = documentType;
+    const dateRange = dateRangeFilter(dateFrom, dateTo);
+    if (dateRange) filter.createdAt = dateRange;
 
-    const total = await Verification.countDocuments({ status: 'pending' });
-    sendSuccess(res, { verifications, total, page: Number(page), totalPages: Math.ceil(total / Number(limit)) });
+    const { data: verifications, ...meta } = await paginate(Verification, filter, {
+      page, limit, sort: { createdAt: 1 },
+      populate: { path: 'userId', select: 'displayName email avatarUrl' },
+    });
+    sendSuccess(res, { verifications, ...meta });
+  } catch (error) {
+    sendFailure(res, error.message);
+  }
+};
+
+// Admin: all verifications — filters: status, documentType, dateFrom, dateTo
+export const getAllVerifications = async (req, res) => {
+  try {
+    const { page, limit, status, documentType, dateFrom, dateTo } = req.query;
+    const filter = {};
+    if (status) filter.status = status;
+    if (documentType) filter.documentType = documentType;
+    const dateRange = dateRangeFilter(dateFrom, dateTo);
+    if (dateRange) filter.createdAt = dateRange;
+
+    const { data: verifications, ...meta } = await paginate(Verification, filter, {
+      page, limit, sort: { createdAt: -1 },
+      populate: [
+        { path: 'userId', select: 'displayName email avatarUrl' },
+        { path: 'reviewerAdminId', select: 'displayName email' },
+      ],
+    });
+    sendSuccess(res, { verifications, ...meta });
   } catch (error) {
     sendFailure(res, error.message);
   }

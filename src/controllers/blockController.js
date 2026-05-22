@@ -1,6 +1,8 @@
 // src/controllers/blockController.js
 import Block from '../models/block.js';
 import { sendSuccess, sendFailure } from '../helper/utils.js';
+import { paginate } from '../utils/paginate.js';
+import { dateRangeFilter } from '../utils/softDelete.js';
 
 export const blockUser = async (req, res) => {
   try {
@@ -27,10 +29,22 @@ export const unblockUser = async (req, res) => {
   }
 };
 
+// Filters: reason, createdFrom, createdTo — paginated
 export const getBlockedUsers = async (req, res) => {
   try {
-    const blocks = await Block.find({ blockerId: req.user._id }).populate('blockedUserId', 'displayName avatarUrl');
-    sendSuccess(res, blocks.map(b => b.blockedUserId));
+    const { page, limit, reason, createdFrom, createdTo } = req.query;
+
+    const filter = { blockerId: req.user._id };
+    if (reason) filter.reason = reason;
+    const dateRange = dateRangeFilter(createdFrom, createdTo);
+    if (dateRange) filter.createdAt = dateRange;
+
+    const { data: blocks, ...meta } = await paginate(Block, filter, {
+      page, limit, sort: { createdAt: -1 },
+      populate: { path: 'blockedUserId', select: 'displayName avatarUrl' },
+    });
+
+    sendSuccess(res, { blocks: blocks.map(b => b.blockedUserId), ...meta });
   } catch (error) {
     sendFailure(res, error.message);
   }

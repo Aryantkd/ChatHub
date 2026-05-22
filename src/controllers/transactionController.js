@@ -2,16 +2,17 @@
 import Transaction from '../models/transaction.js';
 import User from '../models/user.js';
 import { sendSuccess, sendFailure } from '../helper/utils.js';
+import { paginate } from '../utils/paginate.js';
+import { dateRangeFilter } from '../utils/softDelete.js';
 import Stripe from 'stripe';
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export const purchaseTokens = async (req, res) => {
   try {
     const { amount, paymentMethodId } = req.body; // amount in cents
-    // Convert amount to token (e.g., 1 USD = 100 tokens)
-    const tokenAmount = Math.floor(amount / 10); // example rate
+    const tokenAmount = Math.floor(amount / 10); // 1 USD = 100 tokens
 
-    // Create Stripe payment intent
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency: 'usd',
@@ -21,13 +22,11 @@ export const purchaseTokens = async (req, res) => {
     });
 
     if (paymentIntent.status === 'succeeded') {
-      // Update user balance
       const user = await User.findByIdAndUpdate(
         req.user._id,
         { $inc: { tokenBalance: tokenAmount } },
         { new: true }
       );
-      // Log transaction
       const transaction = await Transaction.create({
         userId: req.user._id,
         type: 'purchase_tokens',
@@ -46,22 +45,30 @@ export const purchaseTokens = async (req, res) => {
   }
 };
 
+// Filters: type, dateFrom, dateTo, minAmount, maxAmount
 export const getTransactionHistory = async (req, res) => {
   try {
-    const { page = 1, limit = 20 } = req.query;
-    const transactions = await Transaction.find({ userId: req.user._id })
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip((page - 1) * limit);
-    const total = await Transaction.countDocuments({ userId: req.user._id });
-    sendSuccess(res, { transactions, totalPages: Math.ceil(total / limit), page });
+    const { page, limit, type, dateFrom, dateTo, minAmount, maxAmount } = req.query;
+
+    const filter = { userId: req.user._id };
+    if (type) filter.type = type;
+    const dateRange = dateRangeFilter(dateFrom, dateTo);
+    if (dateRange) filter.createdAt = dateRange;
+    if (minAmount || maxAmount) {
+      filter.tokenAmount = {};
+      if (minAmount) filter.tokenAmount.$gte = Number(minAmount);
+      if (maxAmount) filter.tokenAmount.$lte = Number(maxAmount);
+    }
+
+    const { data: transactions, ...meta } = await paginate(Transaction, filter, {
+      page, limit, sort: { createdAt: -1 },
+    });
+    sendSuccess(res, { transactions, ...meta });
   } catch (error) {
     sendFailure(res, error.message);
   }
 };
 
 export const sendGift = async (req, res) => {
-  // similar to messageController sendGift but use Transaction model
-  // reuse the same logic or call messageController
   sendFailure(res, 'Use /api/message/gift endpoint', 400);
 };

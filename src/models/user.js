@@ -51,7 +51,13 @@ const userSchema = new mongoose.Schema(
     blockList: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 
     referralCode: { type: String, unique: true, sparse: true },
-    referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+    referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    restoredAt: { type: Date, default: null },
+    restoredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true }
 );
@@ -61,6 +67,7 @@ userSchema.index({ interests: 1 });
 userSchema.index({ isOnline: 1, lastActive: -1 });
 userSchema.index({ 'subscription.plan': 1 });
 userSchema.index({ role: 1 });
+userSchema.index({ isDeleted: 1, deletedAt: -1 });
 
 // Password hashing method (for email signup)
 userSchema.methods.comparePassword = async function (candidatePassword) {

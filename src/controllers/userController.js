@@ -1,7 +1,8 @@
 // src/controllers/userController.js
 import User from '../models/user.js';
 import { sendSuccess, sendFailure } from '../helper/utils.js';
-import mongoose from 'mongoose';
+import { paginate } from '../utils/paginate.js';
+import { softDeleteById, restoreById, activeFilter, deletedFilter, dateRangeFilter } from '../utils/softDelete.js';
 
 export const getMyProfile = async (req, res) => {
   sendSuccess(res, req.user);
@@ -34,7 +35,7 @@ export const uploadAvatar = async (req, res) => {
 
 export const getUserById = async (req, res) => {
   try {
-    const user = await User.findById(req.params.userId).select('-passwordHash');
+    const user = await User.findOne(activeFilter({ _id: req.params.userId })).select('-passwordHash');
     if (!user) return sendFailure(res, 'User not found', 404);
     sendSuccess(res, user);
   } catch (error) {
@@ -42,19 +43,53 @@ export const getUserById = async (req, res) => {
   }
 };
 
+// Admin: list all active users with rich filtering
 export const getAllUsers = async (req, res) => {
   try {
-    const { page = 1, limit = 20, role, accountStatus } = req.query;
-    const filter = {};
+    const {
+      page, limit, role, accountStatus, gender, isVerified, isOnline,
+      search, createdFrom, createdTo, updatedFrom, updatedTo,
+    } = req.query;
+
+    const filter = activeFilter();
     if (role) filter.role = role;
     if (accountStatus) filter.accountStatus = accountStatus;
-    const users = await User.find(filter)
-      .select('-passwordHash')
-      .limit(limit * 1)
-      .skip((page - 1) * limit)
-      .sort({ createdAt: -1 });
-    const count = await User.countDocuments(filter);
-    sendSuccess(res, { users, totalPages: Math.ceil(count / limit), currentPage: page });
+    if (gender) filter.gender = gender;
+    if (isVerified !== undefined) filter.isVerified = isVerified === 'true';
+    if (isOnline !== undefined) filter.isOnline = isOnline === 'true';
+    if (search) {
+      filter.$or = [
+        { displayName: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { username: { $regex: search, $options: 'i' } },
+      ];
+    }
+    const createdRange = dateRangeFilter(createdFrom, createdTo);
+    if (createdRange) filter.createdAt = createdRange;
+    const updatedRange = dateRangeFilter(updatedFrom, updatedTo);
+    if (updatedRange) filter.updatedAt = updatedRange;
+
+    const { data: users, ...meta } = await paginate(User, filter, {
+      page, limit, select: '-passwordHash', sort: { createdAt: -1 },
+    });
+    sendSuccess(res, { users, ...meta });
+  } catch (error) {
+    sendFailure(res, error.message);
+  }
+};
+
+// Admin: list soft-deleted users
+export const getDeletedUsers = async (req, res) => {
+  try {
+    const { page, limit, deletedFrom, deletedTo } = req.query;
+    const filter = deletedFilter();
+    const deletedRange = dateRangeFilter(deletedFrom, deletedTo);
+    if (deletedRange) filter.deletedAt = deletedRange;
+
+    const { data: users, ...meta } = await paginate(User, filter, {
+      page, limit, select: '-passwordHash', sort: { deletedAt: -1 },
+    });
+    sendSuccess(res, { users, ...meta });
   } catch (error) {
     sendFailure(res, error.message);
   }
@@ -66,7 +101,11 @@ export const updateUserStatus = async (req, res) => {
     if (!['active', 'suspended', 'banned', 'deactivated'].includes(accountStatus)) {
       return sendFailure(res, 'Invalid status', 400);
     }
-    const user = await User.findByIdAndUpdate(req.params.userId, { accountStatus }, { new: true });
+    const user = await User.findOneAndUpdate(
+      activeFilter({ _id: req.params.userId }),
+      { accountStatus },
+      { new: true }
+    );
     if (!user) return sendFailure(res, 'User not found', 404);
     sendSuccess(res, user, 'Status updated');
   } catch (error) {
@@ -74,10 +113,23 @@ export const updateUserStatus = async (req, res) => {
   }
 };
 
+// Admin: soft-delete a user
 export const deleteUser = async (req, res) => {
   try {
-    await User.findByIdAndDelete(req.params.userId);
+    const user = await softDeleteById(User, req.params.userId, req.user._id);
+    if (!user) return sendFailure(res, 'User not found', 404);
     sendSuccess(res, null, 'User deleted');
+  } catch (error) {
+    sendFailure(res, error.message);
+  }
+};
+
+// Admin: restore a soft-deleted user
+export const restoreUser = async (req, res) => {
+  try {
+    const user = await restoreById(User, req.params.userId, req.user._id);
+    if (!user) return sendFailure(res, 'User not found', 404);
+    sendSuccess(res, user, 'User restored');
   } catch (error) {
     sendFailure(res, error.message);
   }

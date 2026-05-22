@@ -1,6 +1,8 @@
 // src/controllers/scheduledEventController.js
 import { ScheduledEvent, User, Transaction } from '../models/index.js';
 import { sendSuccess, sendFailure } from '../helper/utils.js';
+import { paginate } from '../utils/paginate.js';
+import { dateRangeFilter } from '../utils/softDelete.js';
 import crypto from 'crypto';
 
 export const createScheduledEvent = async (req, res) => {
@@ -30,20 +32,26 @@ export const createScheduledEvent = async (req, res) => {
   }
 };
 
+// Filters: status, interest, hostId, scheduledFrom, scheduledTo, minParticipants
 export const getScheduledEvents = async (req, res) => {
   try {
-    const { page = 1, limit = 20, status = 'upcoming', interest } = req.query;
+    const {
+      page, limit, status = 'upcoming', interest,
+      hostId, scheduledFrom, scheduledTo, minParticipants,
+    } = req.query;
+
     const filter = { status };
     if (interest) filter.interestTags = interest;
+    if (hostId) filter.hostId = hostId;
+    const scheduledRange = dateRangeFilter(scheduledFrom, scheduledTo);
+    if (scheduledRange) filter.scheduledAt = scheduledRange;
+    if (minParticipants) filter['participants.length'] = { $gte: Number(minParticipants) };
 
-    const events = await ScheduledEvent.find(filter)
-      .populate('hostId', 'displayName avatarUrl')
-      .sort({ scheduledAt: 1 })
-      .limit(Number(limit))
-      .skip((Number(page) - 1) * Number(limit));
-
-    const total = await ScheduledEvent.countDocuments(filter);
-    sendSuccess(res, { events, total, page: Number(page), totalPages: Math.ceil(total / Number(limit)) });
+    const { data: events, ...meta } = await paginate(ScheduledEvent, filter, {
+      page, limit, sort: { scheduledAt: 1 },
+      populate: { path: 'hostId', select: 'displayName avatarUrl' },
+    });
+    sendSuccess(res, { events, ...meta });
   } catch (error) {
     sendFailure(res, error.message);
   }

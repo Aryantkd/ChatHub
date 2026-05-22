@@ -13,10 +13,12 @@ export default {
     { method: 'get', path: 'profile', handler: 'getMyProfile' },
     { method: 'put', path: 'profile', handler: 'updateProfile' },
     { method: 'post', path: 'avatar', handler: 'uploadAvatar' },
+    { method: 'get', path: 'deleted', handler: 'getDeletedUsers' },        // admin: soft-deleted list
+    { method: 'put', path: ':userId/restore', handler: 'restoreUser' },    // admin: restore
     { method: 'get', path: ':userId', handler: 'getUserById' },
-    { method: 'get', path: '', handler: 'getAllUsers' },           // admin only
+    { method: 'get', path: '', handler: 'getAllUsers' },                    // admin: active users
     { method: 'put', path: ':userId/status', handler: 'updateUserStatus' }, // admin
-    { method: 'delete', path: ':userId', handler: 'deleteUser' },  // admin
+    { method: 'delete', path: ':userId', handler: 'deleteUser' },           // admin: soft-delete
   ],
   match: [
     { method: 'post', path: 'random', handler: 'createRandomMatch' },
@@ -32,6 +34,7 @@ export default {
     { method: 'get', path: 'match/:matchId', handler: 'getMatchMessages' },
     { method: 'put', path: 'mark-read/:matchId', handler: 'markMessagesAsRead' },
     { method: 'post', path: 'gift', handler: 'sendGift' },
+    { method: 'delete', path: ':messageId', handler: 'deleteMessage' },    // soft-delete own message
   ],
   block: [
     { method: 'post', path: '', handler: 'blockUser' },
@@ -40,29 +43,35 @@ export default {
   ],
   report: [
     { method: 'post', path: '', handler: 'createReport' },
-    { method: 'get', path: '', handler: 'getReports' },            // admin
-    { method: 'put', path: ':reportId/resolve', handler: 'resolveReport' }, // admin
+    { method: 'get', path: '', handler: 'getReports' },                        // admin
+    { method: 'put', path: ':reportId/resolve', handler: 'resolveReport' },    // admin
   ],
   notification: [
+    { method: 'get', path: 'deleted', handler: 'getDeletedNotifications' },              // own trash
+    { method: 'put', path: ':notificationId/restore', handler: 'restoreNotification' },  // restore own
     { method: 'get', path: '', handler: 'getMyNotifications' },
     { method: 'put', path: ':notificationId/read', handler: 'markNotificationRead' },
+    { method: 'put', path: 'mark-all-read', handler: 'markAllRead' },
     { method: 'delete', path: ':notificationId', handler: 'deleteNotification' },
   ],
   transaction: [
     { method: 'post', path: 'purchase-tokens', handler: 'purchaseTokens' },
     { method: 'get', path: 'history', handler: 'getTransactionHistory' },
-    { method: 'post', path: 'send-gift', handler: 'sendGiftTransaction' }, // alternative
+    { method: 'post', path: 'send-gift', handler: 'sendGiftTransaction' },
   ],
   subscription: [
-    { method: 'post', path: 'webhook/stripe', handler: 'stripeWebhook' },   // no auth
+    { method: 'post', path: 'webhook/stripe', handler: 'stripeWebhook' },
     { method: 'get', path: 'me', handler: 'getMySubscription' },
     { method: 'post', path: 'cancel', handler: 'cancelSubscription' },
   ],
   interestRoom: [
     { method: 'get', path: 'active', handler: 'getActiveInterestRooms' },
-    { method: 'post', path: '', handler: 'createInterestRoom' },     // admin
-    { method: 'put', path: ':roomId', handler: 'updateInterestRoom' }, // admin
-    { method: 'delete', path: ':roomId', handler: 'deleteInterestRoom' }, // admin
+    { method: 'get', path: 'deleted', handler: 'getDeletedInterestRooms' },              // admin
+    { method: 'get', path: 'all', handler: 'getAllInterestRooms' },                      // admin
+    { method: 'put', path: ':roomId/restore', handler: 'restoreInterestRoom' },          // admin
+    { method: 'post', path: '', handler: 'createInterestRoom' },
+    { method: 'put', path: ':roomId', handler: 'updateInterestRoom' },
+    { method: 'delete', path: ':roomId', handler: 'deleteInterestRoom' },
   ],
   scheduledEvent: [
     { method: 'post', path: '', handler: 'createScheduledEvent' },
@@ -77,7 +86,8 @@ export default {
   verification: [
     { method: 'post', path: 'submit', handler: 'submitVerification' },
     { method: 'get', path: 'my-status', handler: 'getMyVerificationStatus' },
-    { method: 'put', path: ':verificationId/review', handler: 'reviewVerification' }, // admin
+    { method: 'get', path: 'all', handler: 'getAllVerifications' },                      // admin
+    { method: 'put', path: ':verificationId/review', handler: 'reviewVerification' },    // admin
   ],
   dashboardStats: [
     { method: 'get', path: '', handler: 'getDashboardStats' },
@@ -85,14 +95,16 @@ export default {
   ],
   credentials: [
     { method: 'get', path: 'razorpay', handler: 'razorpayCredentials' },
+    { method: 'put', path: ':credentialId/restore', handler: 'restoreCredential' },      // admin
     { method: 'get', path: '', handler: 'getAllCredentials' },
     { method: 'post', path: '', handler: 'addNewCredentials' },
     { method: 'delete', path: ':credentialId', handler: 'deleteCredential' },
   ],
   plans: [
+    { method: 'get', path: 'active', handler: 'getActivePlans' },
+    { method: 'put', path: ':planId/restore', handler: 'restorePlan' },                  // admin
     { method: 'post', path: '', handler: 'createNewPlan' },
     { method: 'get', path: '', handler: 'getAllPlans' },
-    { method: 'get', path: 'active', handler: 'getActivePlans' },
     { method: 'delete', path: ':planId', handler: 'deletePlan' },
   ],
 };

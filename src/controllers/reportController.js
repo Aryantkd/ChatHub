@@ -2,6 +2,8 @@
 import Report from '../models/report.js';
 import User from '../models/user.js';
 import { sendSuccess, sendFailure } from '../helper/utils.js';
+import { paginate } from '../utils/paginate.js';
+import { dateRangeFilter } from '../utils/softDelete.js';
 
 export const createReport = async (req, res) => {
   try {
@@ -24,18 +26,27 @@ export const createReport = async (req, res) => {
   }
 };
 
+// Filters: status, reason, reporterId, reportedUserId, dateFrom, dateTo
 export const getReports = async (req, res) => {
   try {
-    const { status, page = 1, limit = 20 } = req.query;
+    const { page, limit, status, reason, reporterId, reportedUserId, dateFrom, dateTo } = req.query;
+
     const filter = {};
     if (status) filter.status = status;
-    const reports = await Report.find(filter)
-      .populate('reporterId reportedUserId', 'displayName email')
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip((page - 1) * limit);
-    const total = await Report.countDocuments(filter);
-    sendSuccess(res, { reports, totalPages: Math.ceil(total / limit), page });
+    if (reason) filter.reason = reason;
+    if (reporterId) filter.reporterId = reporterId;
+    if (reportedUserId) filter.reportedUserId = reportedUserId;
+    const dateRange = dateRangeFilter(dateFrom, dateTo);
+    if (dateRange) filter.createdAt = dateRange;
+
+    const { data: reports, ...meta } = await paginate(Report, filter, {
+      page, limit, sort: { createdAt: -1 },
+      populate: [
+        { path: 'reporterId', select: 'displayName email' },
+        { path: 'reportedUserId', select: 'displayName email' },
+      ],
+    });
+    sendSuccess(res, { reports, ...meta });
   } catch (error) {
     sendFailure(res, error.message);
   }
@@ -57,9 +68,11 @@ export const resolveReport = async (req, res) => {
     };
     await report.save();
 
-    // Apply punishment to reported user
     if (action === 'suspend_24h') {
-      await User.findByIdAndUpdate(report.reportedUserId, { accountStatus: 'suspended', lastWarningDate: new Date() });
+      await User.findByIdAndUpdate(report.reportedUserId, {
+        accountStatus: 'suspended',
+        lastWarningDate: new Date(),
+      });
     } else if (action === 'ban') {
       await User.findByIdAndUpdate(report.reportedUserId, { accountStatus: 'banned' });
     }

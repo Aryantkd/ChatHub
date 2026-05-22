@@ -2,8 +2,11 @@
 import Message from '../models/message.js';
 import Match from '../models/match.js';
 import User from '../models/user.js';
+import Block from '../models/block.js';
 import Transaction from '../models/transaction.js';
 import { sendSuccess, sendFailure } from '../helper/utils.js';
+import { paginate } from '../utils/paginate.js';
+import { activeFilter, dateRangeFilter } from '../utils/softDelete.js';
 
 export const sendMessage = async (req, res) => {
   try {
@@ -12,6 +15,16 @@ export const sendMessage = async (req, res) => {
     if (!match) return sendFailure(res, 'Active match not found', 404);
 
     const receiverId = match.participants.find(p => !p.equals(req.user._id));
+
+    // Enforce block: don't allow messages if either party blocked the other
+    const block = await Block.findOne({
+      $or: [
+        { blockerId: req.user._id, blockedUserId: receiverId },
+        { blockerId: receiverId, blockedUserId: req.user._id },
+      ],
+    });
+    if (block) return sendFailure(res, 'Cannot send message to this user', 403);
+
     const newMessage = await Message.create({
       matchId,
       senderId: req.user._id,
@@ -32,20 +45,24 @@ export const sendMessage = async (req, res) => {
   }
 };
 
+// Filters: type, dateFrom, dateTo — excludes soft-deleted messages
 export const getMatchMessages = async (req, res) => {
   try {
     const { matchId } = req.params;
-    const { page = 1, limit = 50 } = req.query;
+    const { page, limit, type, dateFrom, dateTo } = req.query;
+
     const match = await Match.findOne({ _id: matchId, participants: req.user._id });
     if (!match) return sendFailure(res, 'Match not found', 404);
 
-    const messages = await Message.find({ matchId })
-      .sort({ createdAt: 1 })
-      .limit(Number(limit))
-      .skip((Number(page) - 1) * Number(limit));
-    const total = await Message.countDocuments({ matchId });
+    const filter = activeFilter({ matchId });
+    if (type) filter.type = type;
+    const dateRange = dateRangeFilter(dateFrom, dateTo);
+    if (dateRange) filter.createdAt = dateRange;
 
-    sendSuccess(res, { messages, total, page: Number(page), totalPages: Math.ceil(total / limit) });
+    const { data: messages, ...meta } = await paginate(Message, filter, {
+      page, limit, sort: { createdAt: 1 },
+    });
+    sendSuccess(res, { messages, ...meta });
   } catch (error) {
     sendFailure(res, error.message);
   }
@@ -56,8 +73,27 @@ export const markMessagesAsRead = async (req, res) => {
     const { matchId } = req.params;
     const match = await Match.findOne({ _id: matchId, participants: req.user._id });
     if (!match) return sendFailure(res, 'Match not found', 404);
-    await Message.updateMany({ matchId, receiverId: req.user._id, isRead: false }, { isRead: true });
+    await Message.updateMany(
+      { matchId, receiverId: req.user._id, isRead: false, isDeleted: { $ne: true } },
+      { isRead: true }
+    );
     sendSuccess(res, null, 'Messages marked as read');
+  } catch (error) {
+    sendFailure(res, error.message);
+  }
+};
+
+// Soft-delete own message
+export const deleteMessage = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const message = await Message.findOneAndUpdate(
+      { _id: messageId, senderId: req.user._id, isDeleted: { $ne: true } },
+      { $set: { isDeleted: true, deletedAt: new Date(), deletedBy: req.user._id } },
+      { new: true }
+    );
+    if (!message) return sendFailure(res, 'Message not found', 404);
+    sendSuccess(res, null, 'Message deleted');
   } catch (error) {
     sendFailure(res, error.message);
   }

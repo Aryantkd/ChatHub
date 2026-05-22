@@ -12,6 +12,11 @@ const planSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: true },
   stripePriceId: { type: String, sparse: true },
   sortOrder: { type: Number, default: 0 },
+  isDeleted: { type: Boolean, default: false },
+  deletedAt: { type: Date, default: null },
+  deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  restoredAt: { type: Date, default: null },
+  restoredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
 }, { timestamps: true });
 
 planSchema.index({ isActive: 1, sortOrder: 1 });

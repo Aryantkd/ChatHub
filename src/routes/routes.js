@@ -61,8 +61,10 @@ const handlers = {
   uploadAvatar: userController.uploadAvatar,
   getUserById: userController.getUserById,
   getAllUsers: userController.getAllUsers,
+  getDeletedUsers: userController.getDeletedUsers,
   updateUserStatus: userController.updateUserStatus,
   deleteUser: userController.deleteUser,
+  restoreUser: userController.restoreUser,
 
   // match
   createRandomMatch: matchController.createRandomMatch,
@@ -78,6 +80,7 @@ const handlers = {
   getMatchMessages: messageController.getMatchMessages,
   markMessagesAsRead: messageController.markMessagesAsRead,
   sendGift: messageController.sendGift,
+  deleteMessage: messageController.deleteMessage,
 
   // block
   blockUser: blockController.blockUser,
@@ -91,8 +94,11 @@ const handlers = {
 
   // notification
   getMyNotifications: notificationController.getMyNotifications,
+  getDeletedNotifications: notificationController.getDeletedNotifications,
   markNotificationRead: notificationController.markNotificationRead,
   deleteNotification: notificationController.deleteNotification,
+  restoreNotification: notificationController.restoreNotification,
+  markAllRead: notificationController.markAllRead,
 
   // transaction
   purchaseTokens: transactionController.purchaseTokens,
@@ -106,9 +112,12 @@ const handlers = {
 
   // interestRoom
   getActiveInterestRooms: interestRoomController.getActiveInterestRooms,
+  getAllInterestRooms: interestRoomController.getAllInterestRooms,
+  getDeletedInterestRooms: interestRoomController.getDeletedInterestRooms,
   createInterestRoom: interestRoomController.createInterestRoom,
   updateInterestRoom: interestRoomController.updateInterestRoom,
   deleteInterestRoom: interestRoomController.deleteInterestRoom,
+  restoreInterestRoom: interestRoomController.restoreInterestRoom,
 
   // scheduledEvent
   createScheduledEvent: scheduledEventController.createScheduledEvent,
@@ -124,6 +133,7 @@ const handlers = {
   submitVerification: verificationController.submitVerification,
   getMyVerificationStatus: verificationController.getMyVerificationStatus,
   reviewVerification: verificationController.reviewVerification,
+  getAllVerifications: verificationController.getAllVerifications,
 
   // dashboardStats
   getDashboardStats: dashboardStatsController.getDashboardStats,
@@ -134,12 +144,14 @@ const handlers = {
   getAllCredentials: credentialsController.getAllCredentials,
   addNewCredentials: credentialsController.addNewCredentials,
   deleteCredential: credentialsController.deleteCredential,
+  restoreCredential: credentialsController.restoreCredential,
 
   // plans
   createNewPlan: plansController.createNewPlan,
   getAllPlans: plansController.getAllPlans,
   getActivePlans: plansController.getActivePlans,
   deletePlan: plansController.deletePlan,
+  restorePlan: plansController.restorePlan,
 };
 
 // Map validation schemas to handler names
@@ -178,10 +190,18 @@ const authRoles = {
   getAllCredentials: ['admin'],
   addNewCredentials: ['admin'],
   deleteCredential: ['admin'],
+  restoreCredential: ['admin'],
   createNewPlan: ['admin'],
   deletePlan: ['admin'],
+  restorePlan: ['admin'],
   deleteUser: ['admin'],
+  restoreUser: ['admin'],
+  getDeletedUsers: ['admin'],
   getAllUsers: ['admin'],
+  getAllVerifications: ['admin'],
+  getAllInterestRooms: ['admin', 'moderator'],
+  getDeletedInterestRooms: ['admin', 'moderator'],
+  restoreInterestRoom: ['admin', 'moderator'],
   // Admin or moderator
   getReports: ['admin', 'moderator'],
   resolveReport: ['admin', 'moderator'],
